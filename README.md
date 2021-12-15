@@ -17,7 +17,7 @@
 
 ## 使用方法
 
-1. **准备工作**：该插件用Python（Jython）所写，所以需要你的BurpSuite加载Jython的Jar包，下载地址：https://repo1.maven.org/maven2/org/python/jython-standalone/2.7.2/jython-standalone-2.7.2.jar，BurpSuite加载位置：BurpSuite - Extender - Options - Python Environment - Location of Jython standalone JAR file。
+1. **准备工作**：该插件用Python（Jython）所写，所以需要你的BurpSuite加载Jython的Jar包，下载地址：https://repo1.maven.org/maven2/org/python/jython-standalone/2.7.2/jython-standalone-2.7.2.jar ，BurpSuite加载位置：BurpSuite - Extender - Options - Python Environment - Location of Jython standalone JAR file。
 
 2. **准备LDAP Log接口**：由于插件的特殊性，在不更改插件代码的情况下，建议你准备一台服务器，在上面部署LDAP服务并提供一个Web API给到插件，这里推荐[Command2API](https://github.com/gh0stkey/Command2API)项目，搭配JNDIExploit使用。
 
