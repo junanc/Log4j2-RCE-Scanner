@@ -30,7 +30,7 @@ class BurpExtender(IBurpExtender, IScannerCheck):
 
     def _get_hash_str(self):
         new_md5 = md5()
-        new_md5.update(str(random.randint(1,1000000)+"abcdefghijklmnopqrstuvwxyz0123456789"[random.randint(0,35):]))
+        new_md5.update(str(random.randint(1,1000000))+"abcdefghijklmnopqrstuvwxyz0123456789"[random.randint(0,35):])
         return new_md5.hexdigest()[20:]
 
     def _build_payload(self, random_md5):
